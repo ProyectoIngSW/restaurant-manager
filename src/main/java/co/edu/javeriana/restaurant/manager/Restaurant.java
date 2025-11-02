@@ -2,74 +2,63 @@ package co.edu.javeriana.restaurant.manager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+
 /**
- * Clase principal para gestionar un restaurante
- * @author Nombre del Equipo
+ * Clase principal para gestionar un restaurante.
+ * Maneja menú, órdenes, reservas y estadísticas.
  */
 public class Restaurant {
-    private String name;
-    private List<String> menu;
+    private final String name;
+    private final List<String> menu;
+    private final List<String> reservations;
     private double totalRevenue;
-    private List<String> reservations;
 
     /**
-     * Constructor del restaurante
+     * Constructor del restaurante.
      * @param name Nombre del restaurante
      */
     public Restaurant(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("El nombre no puede estar vacío");
+        }
         this.name = name;
         this.menu = new ArrayList<>();
+        this.reservations = new ArrayList<>();
         this.totalRevenue = 0.0;
-        this.reservations = new ArrayList<>(); // Modificacion para reservaciones
     }
-    /**
-     * Obtiene el nombre del restaurante
-     * @return nombre del restaurante
-     */
+
     public String getName() {
         return name;
     }
 
-    /**
-     * Obtiene una copia del menú
-     * @return lista de items del menú
-     */
     public List<String> getMenu() {
         return new ArrayList<>(menu);
     }
 
-    /**
-     * Obtiene los ingresos totales
-     * @return ingresos acumulados
-     */
     public double getTotalRevenue() {
         return totalRevenue;
     }
 
-    // TODO: Agregar métodos para gestionar menú y órdenes
-    // Estos serán implementados por los developers en diferentes branches
-    /**
-     * Agrega un item al menú con su precio
-     * @param item Nombre del item
-     * @param price Precio del item
-     * @throws IllegalArgumentException si el item está vacío o el precio es nega
-    tivo
+    public int getMenuSize() {
+        return menu.size();
+    }
+
+    /** 
+     * Agrega un item al menú con su precio. 
      */
     public void addMenuItem(String item, double price) {
         if (item == null || item.trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre del item no puede estar vacío");
+            throw new IllegalArgumentException("El item no puede estar vacío");
         }
         if (price < 0) {
             throw new IllegalArgumentException("El precio no puede ser negativo");
         }
-        // Forzar decimal con punto (esto está modificado)
-        menu.add(item + " - $" + String.format(java.util.Locale.US, "%.2f", price));
+        menu.add(String.format("%s - $%.2f", item, price));
     }
 
-    /**
-     * Remueve un item del menú por nombre
-     * @param item Nombre del item a remover
-     * @return true si el item fue removido, false si no existía
+    /** 
+     * Remueve un item del menú. 
      */
     public boolean removeMenuItem(String item) {
         if (item == null || item.trim().isEmpty()) {
@@ -77,59 +66,56 @@ public class Restaurant {
         }
         return menu.removeIf(menuItem -> menuItem.startsWith(item.trim()));
     }
-    /**
-     * Obtiene el número de items en el menú
-     * @return cantidad de items
+
+    /** 
+     * Procesa una orden y actualiza los ingresos. 
      */
-    public int getMenuSize() {
-        return menu.size();
+    public void processOrder(String item, double price) {
+        if (price <= 0) {
+            throw new IllegalArgumentException("El precio debe ser positivo");
+        }
+        if (item == null || item.trim().isEmpty()) {
+            throw new IllegalArgumentException("El item no puede estar vacío");
+        }
+        totalRevenue += price;
     }
 
-    /**
-     * Crea una nueva reserva
-     * @param customerName Nombre del cliente
-     * @param partySize Tamaño del grupo
-     * @param dateTime Fecha y hora de la reserva
-     * @throws IllegalArgumentException si los datos no son válidos
+    /** 
+     * Crea una nueva reserva. 
      */
     public void makeReservation(String customerName, int partySize, String dateTime) {
         if (customerName == null || customerName.trim().isEmpty()) {
-            throw new IllegalArgumentException("El nombre del cliente es requerido");
+            throw new IllegalArgumentException("El nombre es requerido");
         }
         if (partySize <= 0) {
-            throw new IllegalArgumentException("El tamaño del grupo debe ser positivo");
+            throw new IllegalArgumentException("El tamaño debe ser positivo");
         }
         if (dateTime == null || dateTime.trim().isEmpty()) {
-            throw new IllegalArgumentException("La fecha y hora son requeridas");
+            throw new IllegalArgumentException("La fecha es requerida");
         }
-
         String reservation = String.format("%s - %d personas - %s",
                 customerName, partySize, dateTime);
         reservations.add(reservation);
     }
-    /**
-     * Obtiene todas las reservas
-     * @return lista de reservas
+
+    /** 
+     * Obtiene todas las reservas. 
      */
     public List<String> getReservations() {
         return new ArrayList<>(reservations);
     }
-    /**
-     * Obtiene el número de reservas activas
-     * @return cantidad de reservas
+
+    /** 
+     * Obtiene estadísticas del restaurante.
+     * 🔧 Se fuerza el uso del punto decimal (Locale.US) para coincidir con los tests.
      */
-    public int getReservationCount() {
-        return reservations.size();
-    }
-    /**
-     * Cancela una reserva por nombre de cliente
-     * @param customerName Nombre del cliente
-     * @return true si se canceló, false si no existía
-     */
-    public boolean cancelReservation(String customerName) {
-        if (customerName == null || customerName.trim().isEmpty()) {
-            return false;
-        }
-        return reservations.removeIf(res -> res.startsWith(customerName.trim()));
+    public String getStatistics() {
+        return String.format(Locale.US,
+            "Restaurant: %s%n" +
+            "Items en menú: %d%n" +
+            "Reservas: %d%n" +
+            "Ingresos totales: $%.2f",
+            name, menu.size(), reservations.size(), totalRevenue
+        );
     }
 }
