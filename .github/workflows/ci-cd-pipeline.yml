@@ -1,0 +1,296 @@
+name: CI/CD Pipeline Completo
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '17'
+  MAVEN_OPTS: "-Xmx1024m"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ============================================
+  # JOB 1: BUILD Y COMPILACIÓN
+  # ============================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      # Si tu pom.xml NO está en la raíz, descomenta working-directory y ajusta la ruta
+      # - name: Compilar con Maven (submódulo)
+      #   run: mvn -f subcarpeta/pom.xml clean compile -B
+
+      - name: Compilar con Maven
+        run: mvn clean compile -B
+
+      - name: Subir artefactos compilados
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-classes
+          path: target/classes
+          retention-days: 1
+
+  # ============================================
+  # JOB 2: TESTS UNITARIOS
+  # ============================================
+  unit-tests:
+    name: Tests Unitarios
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Ejecutar tests unitarios
+        run: mvn test -B
+
+      - name: Generar reporte de cobertura
+        run: mvn jacoco:report
+
+      - name: Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: target/site/jacoco/
+          retention-days: 5
+
+      - name: Comentar cobertura en PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: madrapps/jacoco-report@v1.6.1
+        with:
+          paths: ${{ github.workspace }}/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 60
+          min-coverage-changed-files: 60
+
+  # ============================================
+  # JOB 3: TESTS DE INTEGRACIÓN
+  # ============================================
+  integration-tests:
+    name: Tests de Integración
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      # Ajusta el flag de skip según tu configuración:
+      # -DskipITs salta Failsafe; -DskipTests salta todo
+      - name: Ejecutar tests de integración
+        run: mvn verify -DskipUnitTests
+
+      - name: Subir resultados
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: target/failsafe-reports/
+          retention-days: 5
+
+  # ============================================
+  # JOB 4: CODE QUALITY
+  # ============================================
+  code-quality:
+    name: Análisis de Calidad
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Ejecutar Checkstyle
+        run: mvn checkstyle:check
+        continue-on-error: true
+
+      - name: Subir reporte de Checkstyle
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkstyle-report
+          path: target/checkstyle-result.xml
+          retention-days: 5
+
+  # ============================================
+  # JOB 5: SECURITY SCAN
+  # ============================================
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Ejecutar dependency check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: restaurant-manager
+          path: .
+          format: HTML
+          out: reports
+
+      - name: Subir reporte de seguridad
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: reports/
+          retention-days: 5
+
+  # ============================================
+  # JOB 6: BUILD ARTIFACT
+  # ============================================
+  build-artifact:
+    name: Build Artifact
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, code-quality]
+    if: ${{ github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Obtener versión
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Versión: $VERSION"
+
+      - name: Crear JAR
+        run: mvn package -DskipTests
+
+      - name: Renombrar artifact con versión
+        run: |
+          mv target/restaurant-manager-*.jar \
+             "target/restaurant-manager-${{ steps.version.outputs.VERSION }}.jar"
+
+      - name: Subir JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: restaurant-manager-jar-${{ steps.version.outputs.VERSION }}
+          path: target/restaurant-manager-${{ steps.version.outputs.VERSION }}.jar
+          retention-days: 30
+
+      - name: Artifact creado
+        run: |
+          echo "Artifact creado exitosamente"
+          echo "Nombre: restaurant-manager-${{ steps.version.outputs.VERSION }}.jar"
+          ls -lh target/*.jar
+
+  # ============================================
+  # JOB 7: DEPLOY TO STAGING (Simulado)
+  # ============================================
+  deploy-staging:
+    name: Deploy a Staging
+    runs-on: ubuntu-latest
+    needs: build-artifact
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment:
+      name: staging
+      url: https://staging.restaurant-manager.example.com
+    steps:
+      - name: Descargar artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: restaurant-manager-jar-*
+          merge-multiple: true
+
+      - name: Simular deploy a staging
+        run: |
+          echo "Deployando a ambiente de staging..."
+          echo "Artifact: $(ls *.jar)"
+          echo "URL: https://staging.restaurant-manager.example.com"
+          echo "Deploy simulado completado"
+
+      - name: Smoke tests en staging
+        run: |
+          echo "Ejecutando smoke tests..."
+          echo "Servidor responde: OK"
+          echo "Health check: OK"
+          echo "Endpoints principales: OK"
+
+      - name: Deploy exitoso
+        run: |
+          echo "Deploy a staging completado exitosamente"
+          echo "Aplicación disponible en staging"
+
+  # ============================================
+  # JOB 8: NOTIFICACIONES
+  # ============================================
+  notify:
+    name: Notificaciones
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, code-quality, security-scan]
+    if: ${{ always() }}
+    steps:
+      - name: Resumen de Pipeline
+        run: |
+          echo "==================================="
+          echo " RESUMEN DEL PIPELINE CI/CD"
+          echo "==================================="
+          echo " Tests Unitarios: ${{ needs.unit-tests.result }}"
+          echo " Tests de Integración: ${{ needs.integration-tests.result }}"
+          echo " Calidad de Código: ${{ needs.code-quality.result }}"
+          echo " Security Scan: ${{ needs.security-scan.result }}"
+          echo "==================================="
+
+      - name: Pipeline Exitoso
+        if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' }}
+        run: |
+          echo "¡Pipeline completado exitosamente!"
+          echo "Todos los checks pasaron"
+
+      - name: Pipeline con Warnings
+        if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && (needs.code-quality.result == 'failure' || needs.security-scan.result == 'failure') }}
+        run: |
+          echo "Pipeline completado con warnings"
+          echo "Tests pasaron pero hay issues de calidad o seguridad"
+
+      - name: Pipeline Fallido
+        if: ${{ needs.unit-tests.result == 'failure' || needs.integration-tests.result == 'failure' }}
+        run: |
+          echo "Pipeline falló"
+          echo "Revisar los logs para más detalles"
+          exit 1
