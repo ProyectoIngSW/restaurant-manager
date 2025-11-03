@@ -1,11 +1,11 @@
 name: CI/CD Pipeline Completo
 
 on:
- workflow_dispatch: 
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 env:
   JAVA_VERSION: '17'
@@ -32,10 +32,6 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           distribution: temurin
           cache: maven
-
-      # Si tu pom.xml NO está en la raíz, descomenta working-directory y ajusta la ruta
-      # - name: Compilar con Maven (submódulo)
-      #   run: mvn -f subcarpeta/pom.xml clean compile -B
 
       - name: Compilar con Maven
         run: mvn clean compile -B
@@ -105,8 +101,6 @@ jobs:
           distribution: temurin
           cache: maven
 
-      # Ajusta el flag de skip según tu configuración:
-      # -DskipITs salta Failsafe; -DskipTests salta todo
       - name: Ejecutar tests de integración
         run: mvn verify -DskipUnitTests
 
@@ -174,14 +168,19 @@ jobs:
           retention-days: 5
 
   # ============================================
-  # JOB 6: BUILD ARTIFACT
+  # JOB 6: BUILD ARTIFACT (solo en main)
   # ============================================
   build-artifact:
     name: Build Artifact
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, code-quality]
-    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: [unit-tests, integration-tests, code-quality, security-scan]
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     steps:
+      - name: Debug ref
+        run: echo "ref=${{ github.ref }} | event=${{ github.event_name }}"
+
       - name: Checkout código
         uses: actions/checkout@v4
 
@@ -217,31 +216,42 @@ jobs:
       - name: Artifact creado
         run: |
           echo "Artifact creado exitosamente"
-          echo "Nombre: restaurant-manager-${{ steps.version.outputs.VERSION }}.jar"
           ls -lh target/*.jar
 
   # ============================================
-  # JOB 7: DEPLOY TO STAGING (Simulado)
+  # JOB 7: DEPLOY TO STAGING (solo en main)
   # ============================================
   deploy-staging:
     name: Deploy a Staging
     runs-on: ubuntu-latest
     needs: build-artifact
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     environment:
       name: staging
       url: https://staging.restaurant-manager.example.com
     steps:
+      - name: Debug ref
+        run: echo "ref=${{ github.ref }} | event=${{ github.event_name }}"
+
       - name: Descargar artifact
         uses: actions/download-artifact@v4
         with:
           pattern: restaurant-manager-jar-*
           merge-multiple: true
+          path: .
+
+      - name: Localizar JAR
+        id: locate
+        run: |
+          JAR=$(find . -maxdepth 3 -name "*.jar" | head -n1)
+          test -n "$JAR" && echo "JAR=$JAR" >> "$GITHUB_OUTPUT" || (echo "No hay JAR" && exit 1)
 
       - name: Simular deploy a staging
         run: |
           echo "Deployando a ambiente de staging..."
-          echo "Artifact: $(ls *.jar)"
+          echo "Artifact: ${{ steps.locate.outputs.JAR }}"
           echo "URL: https://staging.restaurant-manager.example.com"
           echo "Deploy simulado completado"
 
@@ -251,11 +261,6 @@ jobs:
           echo "Servidor responde: OK"
           echo "Health check: OK"
           echo "Endpoints principales: OK"
-
-      - name: Deploy exitoso
-        run: |
-          echo "Deploy a staging completado exitosamente"
-          echo "Aplicación disponible en staging"
 
   # ============================================
   # JOB 8: NOTIFICACIONES
@@ -279,19 +284,14 @@ jobs:
 
       - name: Pipeline Exitoso
         if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' }}
-        run: |
-          echo "¡Pipeline completado exitosamente!"
-          echo "Todos los checks pasaron"
+        run: echo "Pipeline completado exitosamente"
 
       - name: Pipeline con Warnings
         if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && (needs.code-quality.result == 'failure' || needs.security-scan.result == 'failure') }}
-        run: |
-          echo "Pipeline completado con warnings"
-          echo "Tests pasaron pero hay issues de calidad o seguridad"
+        run: echo "Tests OK, revisar calidad o seguridad"
 
       - name: Pipeline Fallido
         if: ${{ needs.unit-tests.result == 'failure' || needs.integration-tests.result == 'failure' }}
         run: |
           echo "Pipeline falló"
-          echo "Revisar los logs para más detalles"
           exit 1
