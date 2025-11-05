@@ -51,7 +51,14 @@ completo</description>
             <artifactId>assertj-core</artifactId> 
             <version>3.24.2</version> 
             <scope>test</scope> 
-        </dependency> 
+        </dependency>
+
+         <!-- PostgreSQL Driver --> 
+         <dependency> 
+            <groupId>org.postgresql</groupId> 
+            <artifactId>postgresql</artifactId> 
+            <version>42.6.0</version> 
+        </dependency>  
     </dependencies> 
  
     <build> 
