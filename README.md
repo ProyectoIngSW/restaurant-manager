@@ -111,9 +111,8 @@ docker-compose logs -f
 # Detener
 docker-compose down
  ```
-Ver DOCKER.md para documentación completa de Docker.
-### Imágenes 
-- Docker Hub: tu-usuario/restaurant-manager:latest
+Ver [DOCKER.md](https://github.com/ProyectoIngSW/restaurant-manager/blob/master/DOCKER.md) para documentación completa de Docker.
+### Imágenes
 - Tamaño: ~250MB (optimizada con multi-stage)
 - Base: OpenJDK 17 JRE Slim
 ---
@@ -146,7 +145,9 @@ docker system prune -a --volumes
 - ✅ Sistema de reservas
 - ✅ Pipeline CI/CD completo
 ### v1.1.0 (2025-11-05)
-- ✅ Contenerización
+- ✅ Containerización
+- ✅ Optimización com multi-stage
+- ✅ Conexión a base de datos PostgreSQL
 ## 📄Licencia
 Este proyecto es parte del material educativo del curso de Fundamentos de Ingeniería de
 Software.
