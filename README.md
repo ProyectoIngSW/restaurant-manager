@@ -98,7 +98,38 @@ java -jar target/restaurant-manager-1.0.0.jar
 - ✅ Security alerts habilitados
 - ✅ Branch protection en main
 - ✅ Required reviews para PRs
- 
+
+
+## 🐳 Docker
+La aplicación está completamente containerizada con Docker.
+### Quick Start con Docker
+```bash
+# Levantar la aplicación completa (backend + PostgreSQL)
+docker-compose up -d
+# Ver logs
+docker-compose logs -f
+# Detener
+docker-compose down
+ ```
+Ver DOCKER.md para documentación completa de Docker.
+### Imágenes 
+- Docker Hub: tu-usuario/restaurant-manager:latest
+- Tamaño: ~250MB (optimizada con multi-stage)
+- Base: OpenJDK 17 JRE Slim
+---
+## Limpiar al Terminar la Clase
+```bash
+# Detener todos los servicios
+docker-compose down
+# Ver qué consumen espacio
+docker system df
+# Limpiar contenedores detenidos
+docker container prune -f
+# Limpiar imágenes sin usar
+docker image prune -f
+# (Opcional) Limpiar todo
+docker system prune -a --volumes
+ ```
 ## 👥 Equipo
 - Maintainer: Paula Gabriela Losada
 - Developers: 
@@ -114,6 +145,8 @@ java -jar target/restaurant-manager-1.0.0.jar
 - ✅ Procesamiento de órdenes
 - ✅ Sistema de reservas
 - ✅ Pipeline CI/CD completo
+### v1.1.0 (2025-11-05)
+- ✅ Contenerización
 ## 📄Licencia
 Este proyecto es parte del material educativo del curso de Fundamentos de Ingeniería de
 Software.
