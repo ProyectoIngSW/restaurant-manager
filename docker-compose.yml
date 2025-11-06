@@ -1,88 +1,52 @@
-version: '3.8'
-
 services:
-  # ===================================
-  # Base de Datos PostgreSQL
-  # ===================================
   database:
     image: postgres:15-alpine
     container_name: restaurant-db
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: restaurant
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: restaurant123
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
-
     ports:
       - "5432:5432"
-
     volumes:
-      # Persistencia de datos
       - postgres-data:/var/lib/postgresql/data
-      # Script de inicialización (opcional)
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
-
     networks:
       - restaurant-network
-
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d restaurant"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ===================================
-  # Aplicación Backend (Restaurant Manager)
-  # ===================================
   backend:
     build:
       context: .
       dockerfile: Dockerfile.multistage
-
     image: restaurant-manager:compose
     container_name: restaurant-backend
     restart: unless-stopped
-
     depends_on:
       database:
         condition: service_healthy
-
     environment:
-      # Database connection
       DB_HOST: database
       DB_PORT: 5432
       DB_NAME: restaurant
       DB_USER: postgres
       DB_PASSWORD: restaurant123
-
-      # Java options
-      JAVA_OPTS: "-Xmx256m -Xms128m"
-
+      JAVA_OPTS: "-Xmx256m -Xms128m -XX:+UseG1GC"
     ports:
       - "8080:8080"
-
     networks:
       - restaurant-network
 
-    healthcheck:
-      test: ["CMD", "java", "-cp", "app.jar", "co.edu.javeriana.restaurant.manager.Main"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-# ===================================
-# Volúmenes
-# ===================================
 volumes:
   postgres-data:
     driver: local
 
-# ===================================
-# Redes
-# ===================================
 networks:
   restaurant-network:
     driver: bridge
